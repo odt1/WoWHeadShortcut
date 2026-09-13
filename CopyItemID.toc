@@ -1,0 +1,5 @@
+## Title: CopyItemID
+## Interface: 30300
+## Notes: User Interface Replacement
+## Version: 1.0
+CopyItemID.lua
