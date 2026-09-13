@@ -80,6 +80,19 @@ The `luac` on PATH is Lua 5.4, but the game embeds Lua 5.1. It accepts 5.4-only 
 Runtime errors show up in game after `/reload`. `C:\Games\WoW\Logs\FrameXML.log` records load
 problems.
 
+## Releasing
+
+`.github/workflows/release.yml` builds a release when a `v*` tag is pushed. The tag has to match
+`## Version:` in `WoWHeadShortcut.toc` (tag `v2.0` for version `2.0`), or the job fails before
+building anything. Bump the TOC version, commit, then:
+
+    git tag v2.0
+    git push origin v2.0
+
+The job runs `git archive --prefix=WoWHeadShortcut/`, so players get a zip they can extract straight
+into `Interface\AddOns`, and attaches it to a GitHub release with generated notes. Paths marked
+`export-ignore` in `.gitattributes` stay out of the zip; add any new dev-only file there.
+
 ## Style
 
 Tabs for indentation. Chat output goes through `Print`, which adds the `|cff33ffcc[WoWHeadShortcut]|r`

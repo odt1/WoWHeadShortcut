@@ -1,0 +1,4 @@
+# Kept out of the release zip
+.gitattributes export-ignore
+.github export-ignore
+CLAUDE.md export-ignore
