@@ -1,0 +1,7 @@
+## Title: WoWHeadShortcut
+## Interface: 30300
+## Notes: Copies a Wowhead link for the item, spell or NPC under the cursor
+## Version: 2.0
+## SavedVariables: WoWHeadShortcutDB
+WoWHeadShortcut.lua
+Options.lua

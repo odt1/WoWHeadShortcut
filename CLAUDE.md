@@ -4,12 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A one-file World of Warcraft addon. Hover an item, spell or NPC, run `/copyitem`, and a Wowhead URL
-for it lands on the system clipboard.
+WoWHeadShortcut, a World of Warcraft addon. Hover an item, spell or NPC and press Shift+Alt+C (or
+run `/copylink`) to get a Wowhead URL for it. `/copylink options` opens the settings panel under
+Interface > AddOns.
 
-This folder is the live install at `C:\Games\WoW\Interface\AddOns\CopyItemID`. It has no git
-repository and no history to fall back on. An edit takes effect the next time the game runs
-`/reload`.
+This folder is the live install at `C:\Games\WoW\Interface\AddOns\WoWHeadShortcut`, with its own git
+repository. The folder name has to match the `.toc` name or the client won't load it. Lua and XML
+edits take effect on `/reload`. Changes to the `.toc` (a new file, a new SavedVariables entry) and a
+newly added `Bindings.xml` need a full client restart.
+
+The addon used to be called CopyItemID. `LEGACY_BINDING_ACTION` in `WoWHeadShortcut.lua` is the only
+place that name is still meant to appear.
 
 ## Target client
 
@@ -17,33 +22,57 @@ repository and no history to fall back on. An edit takes effect the next time th
   exists in 3.3.5. Retail and Classic-era docs describe functions this client doesn't have, or has
   with a different signature. For example, `PlaySound` here takes a sound name string, where retail
   takes a SoundKit ID.
-- The client is patched with AwesomeWotLK (`AwesomeWotlkLib.dll` in the game root). The stock client
-  has no `CopyToClipboard`; that DLL adds it, and the call errors without the patch.
+- The client may be patched with AwesomeWotLK (`AwesomeWotlkLib.dll` in the game root), which adds
+  the global `CopyToClipboard`. The stock client has no clipboard API. `ns:HasClipboard()` checks for
+  the function on every copy and falls back to a StaticPopup with the URL selected when it's missing.
 - NPC IDs come from the 3.3.5 hex GUID string (`0xF130` + 6 hex digits of creature entry + spawn
   counter), which is why the code reads `guid:sub(7, 12)`. Later clients use a different GUID format.
+- `self.editBox` isn't reliably set on 3.3.5 StaticPopups. Look the box up as
+  `_G[self:GetName() .. "WideEditBox"]` or `.. "EditBox"`, which is what Questie-335 and the popup
+  here do.
+- `UIDropDownMenuTemplate` and `OptionsCheckButtonTemplate` find their child regions by global name
+  (`<name>Text`), so frames built from them need a name. `CheckButton:GetChecked()` returns `1` or
+  `nil`, not a boolean.
+- `Bindings.xml` has no working default key attribute for addons in this client. Key strings put
+  modifiers in `ALT-CTRL-SHIFT-` order, as `WTF\Account\<name>\bindings-cache.wtf` shows.
+
+Other 3.3.5 addons in `C:\Games\WoW\Interface\AddOns` are the best reference for what this client
+supports. Grep them before relying on an API from memory.
 
 ## How it works
 
-`CopyItemID.lua` checks `GameTooltip` in priority order: item link first, then spell, then unit.
-The unit check skips players and falls back to `mouseover` when the tooltip has no unit. The
-resulting `(id, type)` goes through `TYPE_MAP` to build `WOWHEAD_BASE .. slug .. id`.
+`WoWHeadShortcut.lua` holds the logic. It sets up the addon namespace (`local addonName, ns = ...`)
+and exports it as the global `WoWHeadShortcut`, which is how `Bindings.xml` calls
+`WoWHeadShortcut:CopyHovered()`. The `BINDING_HEADER_*` and `BINDING_NAME_*` strings for the Key
+Bindings screen are defined there too.
 
-- `WOWHEAD_BASE` points at `wowhead.com/wotlk/`. The commented-out line underneath is a local AoWoW
-  instance, which uses the same `item=`/`spell=`/`npc=` query slugs.
-- The `COPY_HOVERED_ID` StaticPopup (an edit box with the URL selected) is still defined, but its
-  `StaticPopup_Show` call is commented out and `CopyToClipboard` runs instead. Re-enabling the popup
-  would let a client without AwesomeWotLK copy the URL by hand.
-- The ODT account runs the command from a macro named `ItemID`, stored in
-  `WTF\Account\ODT\macros-cache.txt`. Renaming `/copyitem` breaks that macro.
-- The addon is disabled for the AzerothCore test and admin characters in their `AddOns.txt`.
+`CopyHovered` checks `GameTooltip` in priority order: item link first, then spell, then unit. The
+unit check skips players and falls back to `mouseover` when the tooltip has no unit. The URL is the
+base URL, then the `TYPE_MAP` slug (`item=`, `spell=`, `npc=`), then the ID.
 
-A new Lua file has to be listed in `CopyItemID.toc` or the client never loads it.
+- `ns.sites` drives the site dropdown. An entry with a `url` is a preset; the entry without one uses
+  `db.customUrl`. Nothing is inserted between base and slug, so a custom base has to end where the
+  slug goes (`http://localhost/aowow/?` for AoWoW).
+- `ns:PlayNamedSound` sends anything containing a slash, backslash or dot to `PlaySoundFile` and
+  everything else to `PlaySound`. The copy sound only plays when the URL went to the clipboard.
+- Settings live in the account-wide SavedVariable `WoWHeadShortcutDB`. On `ADDON_LOADED` any key
+  missing from it is filled from `ns.defaults`, so a new setting only needs a default.
+- The Shift+Alt+C default is set from code on `VARIABLES_LOADED`, the first point where bindings can
+  be read. It runs once per account (`db.defaultBindingApplied`, kept out of `ns.defaults` so the
+  options Defaults button doesn't re-arm it). It only takes the key when the key is free or still
+  bound to the old CopyItemID action, and it prints a message instead when the key is taken.
+
+`Options.lua` builds the Interface Options panel in `ns:InitOptions()`, called from the
+`ADDON_LOADED` handler because `UIDropDownMenu_Initialize` runs the menu builder immediately and needs
+`ns.db`. Widgets write to `db` as they change, so the panel's `okay` and `cancel` are no-ops. The
+edit boxes' `OnTextChanged` handlers call `UpdateState`, which must never call `SetText` on an edit
+box, or the handlers would loop.
 
 ## Checking changes
 
 There is no build, lint or test setup. Outside the game you can only check syntax:
 
-    luac -p CopyItemID.lua
+    luac -p WoWHeadShortcut.lua Options.lua
 
 The `luac` on PATH is Lua 5.4, but the game embeds Lua 5.1. It accepts 5.4-only syntax such as
 `goto`, `//`, the bitwise operators and `<const>`, all of which fail in game, so don't use them.
@@ -53,5 +82,5 @@ problems.
 
 ## Style
 
-4-space indentation. Lines 72 and 73 of `CopyItemID.lua` use tabs; don't copy that. Chat output uses
-the `|cff33ffcc[CopyID]|r` prefix.
+Tabs for indentation. Chat output goes through `Print`, which adds the `|cff33ffcc[WoWHeadShortcut]|r`
+prefix.

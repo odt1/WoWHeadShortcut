@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="WOWHEADSHORTCUT_COPY" header="WOWHEADSHORTCUT">
+		WoWHeadShortcut:CopyHovered()
+	</Binding>
+</Bindings>
